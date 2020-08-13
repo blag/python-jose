@@ -47,15 +47,6 @@ RAW_SIGNATURE = (
 )
 
 
-def _backend_exception_types():
-    """Build the backend exception types based on available backends."""
-    if None not in (ECDSAECKey, ecdsa):
-        yield ECDSAECKey, ecdsa.BadDigestError
-
-    if CryptographyECKey is not None:
-        yield CryptographyECKey, TypeError
-
-
 @pytest.mark.ecdsa
 @pytest.mark.skipif(
     None in (ECDSAECKey, ecdsa),
@@ -114,11 +105,20 @@ class TestECAlgorithm:
         public_pem = key.public_key().to_pem()
         assert ECKey(public_pem, ALGORITHMS.ES256).is_public()
 
-    @pytest.mark.parametrize("Backend,ExceptionType", _backend_exception_types())
-    def test_key_too_short(self, Backend, ExceptionType):
-        key = Backend(TOO_SHORT_PRIVATE_KEY, ALGORITHMS.ES512)
-        with pytest.raises(ExceptionType):
+    @pytest.mark.cryptography
+    @pytest.mark.skipif(CryptographyECKey is None, reason="pyca/cryptography backend not available")
+    def test_key_too_short(self):
+        key = CryptographyECKey(TOO_SHORT_PRIVATE_KEY, ALGORITHMS.ES512)
+        with pytest.raises(TypeError):
             key.sign(b'foo')
+
+    @pytest.mark.ecdsa
+    @pytest.mark.skipif(None in (ECDSAECKey, ecdsa), reason="python-ecdsa backend not available")
+    def test_short_key(self):
+        key = ECDSAECKey(TOO_SHORT_PRIVATE_KEY, ALGORITHMS.ES512)
+        signature = key.sign(b'foo')
+        assert bool(signature)
+        assert signature == b''
 
     def test_get_public_key(self):
         key = ECKey(private_key, ALGORITHMS.ES256)
